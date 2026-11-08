@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: variable-driven-state-buttons
+expected_outcome: |
+  A custom variable show_state exists with default value IDLE. A page scratch-state exists at the end. The button at 1/0 shows the variable through its text (text contains $(custom:show_state)) and its background colour depends on the variable being LIVE, implemented either as an expression on the background element's colour or as an internal feedback on the variable with a style override on the background element. The button at 1/1 has an internal custom_variable_set_value action with name show_state and value LIVE. Nothing was pressed, and the report states locations and the mechanism used.

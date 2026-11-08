@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: explain-menu-and-surface-grouping
+expected_outcome: |
+  The answer names the MENU page's buttons (SHOW and H20 at row 0, plus the button at row 3 column 15) and explains that each fires internal set_page actions, one per surface (both Stream Deck XLs and the emulator), to page 1 and page 4 respectively. It states that the two XLs are in separate auto groups (no manual group), both at xOffset 0 and 8 forming the 16x4 grid, starting on page 1 with use last page enabled. It recommends a manual surface group so one set_page action targets both decks and the pair gets a stable id. Nothing was changed.
