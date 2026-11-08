@@ -268,6 +268,18 @@ export function registerTriggerTools(server: McpServer, client: CompanionClient)
 	)
 
 	server.registerTool(
+		'list_trigger_events',
+		{
+			description:
+				'List the event types a trigger can react to (ids, labels and their option fields). Use the ids with add_event.',
+		},
+		async () => {
+			const events = await client.instances.definitions.events.query()
+			return textResult(events)
+		}
+	)
+
+	server.registerTool(
 		'list_trigger_collections',
 		{
 			description: 'List all trigger collections (groups) with their IDs and names',

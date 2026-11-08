@@ -52,6 +52,25 @@ npm run smoke -- http://127.0.0.1:8000
 `npm run smoke -- http://127.0.0.1:8000 --write` additionally creates a page named `mcp-smoke`,
 builds one button on it, presses it and removes the page again.
 
+Any tool can also be called from a shell, which is handy for scripts and for agents whose session
+has no MCP client:
+
+```bash
+node scripts/call.mjs list-tools
+node scripts/call.mjs describe_page '{"pageNumber":1}'
+node scripts/call.mjs --url http://192.168.1.50:8000 list_surfaces
+```
+
+## Skill for AI agents
+
+`skills/companion/` holds a Claude skill (`SKILL.md` plus references) that teaches an agent
+Companion's model, the safe workflow (orient, look up definitions, change in batches, verify,
+report) and the limits (pressing buttons fires real devices, deletes are instant). The references
+are a digest of the Companion 5.1 manual, a generated catalogue of internal actions, feedbacks and
+trigger events (`node scripts/dump-internal-reference.mjs`), and a place for house-specific facts.
+Install it by copying or linking `skills/companion` into `.claude/skills/` of the workspace that
+uses it.
+
 ## Configure your MCP client
 
 The server speaks MCP over stdio. It takes the Companion URL as its first argument, or from
@@ -103,19 +122,20 @@ must be bound to a reachable address (Settings > Admin interface, "bind IP").
 | Tool | Description |
 |------|-------------|
 | `list_pages` | Pages with names and occupied grid positions |
+| `describe_page` | Every button of a page in one call: text, colours, actions, feedbacks |
 | `create_page`, `remove_page`, `set_page_name`, `move_page`, `clear_page` | Page management |
-| `get_button` | Compact summary of a button (style, elements, actions, feedbacks, runtime); `full=true` for the raw model |
-| `create_button` | Create an empty layered button (or `pagenum`/`pageup`/`pagedown`) |
+| `get_button` | Compact summary of a button (style, elements, actions, feedbacks with style overrides, runtime); `full=true` for the raw model |
+| `create_button` | Create an empty layered button (or `pagenum`/`pageup`/`pagedown`); refuses to overwrite an existing button unless `replace=true` |
 | `delete_button` | Remove a button |
 | `copy_button` | Copy, move or swap buttons between locations |
-| `update_button` | Ordered operations: `set_style`, `set_element_options`, `add_element`, `remove_element`, `add_action`, `add_feedback`, `update_entity_options`, `set_entity_enabled`, `set_feedback_inverted`, `remove_entity`, `set_option` |
+| `update_button` | Ordered operations: `set_style`, `set_element_options`, `add_element`, `remove_element`, `add_action`, `add_feedback`, `update_entity_options`, `set_entity_enabled`, `set_feedback_inverted`, `set_feedback_style`, `remove_feedback_style`, `remove_entity`, `set_option` |
 | `press_button` | Press (down+up, or one direction) |
 | `list_presets`, `import_preset` | Browse and place module presets |
 
 ### Triggers
 | Tool | Description |
 |------|-------------|
-| `list_triggers`, `list_trigger_collections`, `get_trigger` | Read triggers |
+| `list_triggers`, `list_trigger_collections`, `list_trigger_events`, `get_trigger` | Read triggers and the available event types |
 | `create_trigger`, `clone_trigger`, `update_trigger`, `batch_update_triggers` | Write triggers (events, conditions, actions, collections) |
 | `test_trigger` | Run a trigger's actions once |
 | `create_trigger_collection`, `delete_trigger` | |

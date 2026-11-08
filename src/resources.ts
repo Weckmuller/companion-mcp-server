@@ -27,7 +27,9 @@ Companion 5 buttons are "layered": their look is a stack of style elements (canv
 box, a text element, optional images/shapes). \`update_button\` with \`set_style\` edits the default
 text and background; \`set_element_options\` and \`add_element\` give full control. Buttons also have:
 - **Actions** in steps and action sets ("down" = press, "up" = release, numbers = hold durations)
-- **Feedbacks**: dynamic styling or conditions driven by device state
+- **Feedbacks**: conditions driven by device state or variables. A boolean feedback restyles the
+  button only through style overrides (\`set_feedback_style\`: element + property + value); without
+  one it does nothing visible.
 
 Option values are plain values; pass \`{ "value": "...", "isExpression": true }\` to use an expression.
 

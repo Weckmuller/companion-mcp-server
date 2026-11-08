@@ -1,6 +1,6 @@
 {
 	"name": "companion-mcp-server",
-	"version": "5.1.0",
+	"version": "5.1.1",
 	"description": "Standalone MCP server for Bitfocus Companion 5.x: buttons, triggers, variables, connections and surfaces",
 	"type": "module",
 	"main": "dist/index.js",

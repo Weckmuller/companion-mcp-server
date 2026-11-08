@@ -60,6 +60,9 @@ Every element property is `{ value, isExpression }`.
 | `add_feedback` | same with `entityLocation: 'feedbacks'`, `entityType: 'feedback'` |
 | option values | `controls.entities.setOption({ ..., value: { value, isExpression } })` — **must be wrapped** in 5.x |
 | `set_feedback_inverted` | `controls.entities.setInverted({ ..., isInverted: { value, isExpression: false } })` |
+| `set_feedback_style` / `remove_feedback_style` | `controls.entities.replaceStyleOverride({ ..., override: { overrideId, elementId, elementProperty, override: { value, isExpression } } })` / `removeStyleOverride`. Feedback definitions often add default overrides on creation (`styleOverrides[]` in the control model); the tool reuses the `overrideId` of a matching element+property. |
+| `describe_page` | `pages.watch` + one `controls.watchControl` per occupied position |
+| `list_trigger_events` | `instances.definitions.events.query()` |
 | `set_entity_enabled` | `controls.entities.setEnabled` |
 | `set_option` | `controls.setOptionsField({ controlId, key, value })` (plain value) |
 | `press_button` | `controls.hotPressControl({ location, direction, surfaceId: 'mcp' })` |
