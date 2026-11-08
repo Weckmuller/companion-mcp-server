@@ -1,10 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { CompanionClient } from '../trpc-client.js'
-import { getInitialData } from '../trpc-client.js'
+import { expectInit, getInitialData, textResult, toExpressionOrValue } from '../trpc-client.js'
+
 // Inlined from @companion-app/shared to allow standalone npm publishing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const EntityModelType = { Action: 'action' as any, Feedback: 'feedback' as any }
+const EntityModelType = { Action: 'action', Feedback: 'feedback' } as const
 
 const operationSchema = z.union([
 	z.object({
@@ -20,7 +20,8 @@ const operationSchema = z.union([
 	}),
 	z.object({
 		op: z.literal('add_event'),
-		eventType: z.string().describe('Event type (e.g., "interval", "startup", "variable_changed", "condition_true")'),
+		eventType: z.string().describe('Event type (e.g., "interval", "timeofday", "startup", "variable_changed", "condition_true", "computer_locked")'),
+		options: z.record(z.string(), z.unknown()).optional().describe('Option values for the new event'),
 	}),
 	z.object({
 		op: z.literal('update_event_options'),
@@ -61,6 +62,12 @@ const operationSchema = z.union([
 		entityLocation: z.enum(['trigger_actions', 'feedbacks']).optional().describe('Entity location (default: "trigger_actions")'),
 	}),
 	z.object({
+		op: z.literal('set_entity_enabled'),
+		entityId: z.string().describe('The entity ID'),
+		enabled: z.boolean(),
+		entityLocation: z.enum(['trigger_actions', 'feedbacks']).optional().describe('Entity location (default: "trigger_actions")'),
+	}),
+	z.object({
 		op: z.literal('remove_entity'),
 		entityId: z.string().describe('The entity ID'),
 		entityLocation: z.enum(['trigger_actions', 'feedbacks']).optional().describe('Entity location (default: "trigger_actions")'),
@@ -77,45 +84,49 @@ async function executeOperations(
 ): Promise<OperationResult[]> {
 	const results: OperationResult[] = []
 
+	const setOptions = async (
+		entityLocation: 'trigger_actions' | 'feedbacks',
+		entityId: string,
+		options: Record<string, unknown>
+	) => {
+		for (const [key, value] of Object.entries(options)) {
+			await client.controls.entities.setOption.mutate({
+				controlId,
+				entityLocation,
+				entityId,
+				key,
+				value: toExpressionOrValue(value),
+			})
+		}
+	}
+
 	for (const operation of operations) {
 		try {
 			switch (operation.op) {
 				case 'set_options': {
 					if (operation.name !== undefined) {
-						await client.controls.setOptionsField.mutate({
-							controlId,
-							key: 'name',
-							value: operation.name,
-						})
+						await client.controls.setOptionsField.mutate({ controlId, key: 'name', value: operation.name })
 					}
 					if (operation.enabled !== undefined) {
-						await client.controls.setOptionsField.mutate({
-							controlId,
-							key: 'enabled',
-							value: operation.enabled,
-						})
+						await client.controls.setOptionsField.mutate({ controlId, key: 'enabled', value: operation.enabled })
 					}
 					if (operation.collectionId !== undefined) {
-						const dropIndex = operation.sortOrder ?? 0
 						await client.controls.triggers.reorder.mutate({
 							collectionId: operation.collectionId,
 							controlId,
-							dropIndex,
+							dropIndex: operation.sortOrder ?? 0,
 						})
 					}
 					results.push({ op: 'set_options', success: true })
 					break
 				}
 				case 'add_event': {
-					const eventId = await client.controls.events.add.mutate({
-						controlId,
-						eventType: operation.eventType,
-					})
-					results.push({
-						op: 'add_event',
-						success: true,
-						eventId: eventId ? String(eventId) : undefined,
-					})
+					const eventId = await client.controls.events.add.mutate({ controlId, eventType: operation.eventType })
+					if (!eventId) throw new Error('Companion did not create the event (unknown event type?)')
+					for (const [key, value] of Object.entries(operation.options ?? {})) {
+						await client.controls.events.setOption.mutate({ controlId, eventId: String(eventId), key, value })
+					}
+					results.push({ op: 'add_event', success: true, eventId: String(eventId) })
 					break
 				}
 				case 'update_event_options': {
@@ -129,10 +140,7 @@ async function executeOperations(
 					break
 				}
 				case 'remove_event': {
-					await client.controls.events.remove.mutate({
-						controlId,
-						eventId: operation.eventId,
-					})
+					await client.controls.events.remove.mutate({ controlId, eventId: operation.eventId })
 					results.push({ op: 'remove_event', success: true })
 					break
 				}
@@ -149,22 +157,9 @@ async function executeOperations(
 						entityType: EntityModelType.Action,
 						entityDefinition: operation.actionId,
 					})
-					if (entityId && operation.options) {
-						for (const [key, value] of Object.entries(operation.options)) {
-							await client.controls.entities.setOption.mutate({
-								controlId,
-								entityLocation: 'trigger_actions',
-								entityId,
-								key,
-								value,
-							})
-						}
-					}
-					results.push({
-						op: 'add_action',
-						success: true,
-						entityId: entityId ?? undefined,
-					})
+					if (!entityId) throw new Error('Companion did not create the action (unknown connection or action ID?)')
+					if (operation.options) await setOptions('trigger_actions', entityId, operation.options)
+					results.push({ op: 'add_action', success: true, entityId })
 					break
 				}
 				case 'add_condition': {
@@ -181,22 +176,9 @@ async function executeOperations(
 						entityType: EntityModelType.Feedback,
 						entityDefinition: operation.feedbackId,
 					})
-					if (entityId && operation.options) {
-						for (const [key, value] of Object.entries(operation.options)) {
-							await client.controls.entities.setOption.mutate({
-								controlId,
-								entityLocation: conditionLocation,
-								entityId,
-								key,
-								value,
-							})
-						}
-					}
-					results.push({
-						op: 'add_condition',
-						success: true,
-						entityId: entityId ?? undefined,
-					})
+					if (!entityId) throw new Error('Companion did not create the condition (unknown connection or feedback ID?)')
+					if (operation.options) await setOptions(conditionLocation, entityId, operation.options)
+					results.push({ op: 'add_condition', success: true, entityId })
 					break
 				}
 				case 'set_entity_inverted': {
@@ -204,23 +186,24 @@ async function executeOperations(
 						controlId,
 						entityLocation: operation.entityLocation ?? 'feedbacks',
 						entityId: operation.entityId,
-						isInverted: operation.isInverted,
+						isInverted: { value: operation.isInverted, isExpression: false },
 					})
 					results.push({ op: 'set_entity_inverted', success: true })
 					break
 				}
 				case 'update_entity_options': {
-					const location = operation.entityLocation ?? 'trigger_actions'
-					for (const [key, value] of Object.entries(operation.options)) {
-						await client.controls.entities.setOption.mutate({
-							controlId,
-							entityLocation: location,
-							entityId: operation.entityId,
-							key,
-							value,
-						})
-					}
+					await setOptions(operation.entityLocation ?? 'trigger_actions', operation.entityId, operation.options)
 					results.push({ op: 'update_entity_options', success: true })
+					break
+				}
+				case 'set_entity_enabled': {
+					await client.controls.entities.setEnabled.mutate({
+						controlId,
+						entityLocation: operation.entityLocation ?? 'trigger_actions',
+						entityId: operation.entityId,
+						enabled: operation.enabled,
+					})
+					results.push({ op: 'set_entity_enabled', success: true })
 					break
 				}
 				case 'remove_entity': {
@@ -234,7 +217,7 @@ async function executeOperations(
 				}
 			}
 		} catch (e) {
-			results.push({ op: operation.op, success: false, error: String(e) })
+			results.push({ op: operation.op, success: false, error: String((e as Error)?.message ?? e) })
 		}
 	}
 
@@ -243,41 +226,44 @@ async function executeOperations(
 
 const operationsDescription = `Available operations:
 - set_options: Set trigger name, enabled state, and/or collection. Use sortOrder with collectionId for explicit positioning.
-- add_event: Add an event to the trigger (e.g., "interval", "startup", "variable_changed", "condition_true")
+- add_event: Add an event to the trigger (e.g., "interval", "timeofday", "startup", "variable_changed", "condition_true"), optionally with options.
 - update_event_options: Update an event's options
 - remove_event: Remove an event from the trigger
 - add_action: Add an action to the trigger (optionally as child of a parent entity using parentId/childGroup). Optionally pass options to configure it immediately.
 - add_condition: Add a condition (feedback) to the trigger (optionally as child of a parent entity). Optionally pass options to configure it immediately.
 - set_entity_inverted: Set isInverted on a condition entity
 - update_entity_options: Update options on an entity (action or condition). Use entityLocation "feedbacks" for conditions, "trigger_actions" for actions (default).
-- remove_entity: Remove an entity (action or condition)`
+- set_entity_enabled: Enable or disable an action or condition without removing it
+- remove_entity: Remove an entity (action or condition)
+
+Option values may be expressions: pass { "value": "<expression>", "isExpression": true } instead of a plain value.`
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function readTriggers(client: CompanionClient): Promise<Record<string, any>> {
+	const data = expectInit(
+		await getInitialData((observer) => client.controls.triggers.watch.subscribe(undefined, observer)),
+		'controls.triggers.watch'
+	)
+	return data.triggers ?? {}
+}
 
 export function registerTriggerTools(server: McpServer, client: CompanionClient): void {
 	server.registerTool(
 		'list_triggers',
 		{
-			description:
-				'List all triggers with their names, enabled state, descriptions, and collection IDs',
+			description: 'List all triggers with their names, enabled state, descriptions, and collection IDs',
 		},
 		async () => {
-			const data = await getInitialData((observer) =>
-				client.controls.triggers.watch.subscribe(undefined, observer)
-			)
-			if (data.type !== 'init') throw new Error('Expected init message')
-
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const triggers = Object.entries(data.triggers as Record<string, any>).map(
-				([controlId, info]) => ({
-					controlId,
-					name: info.name,
-					enabled: info.enabled,
-					description: info.description,
-					collectionId: info.collectionId ?? null,
-					sortOrder: info.sortOrder,
-					lastExecuted: info.lastExecuted,
-				})
-			)
-			return { content: [{ type: 'text', text: JSON.stringify(triggers, null, 2) }] }
+			const triggers = Object.entries(await readTriggers(client)).map(([controlId, info]) => ({
+				controlId,
+				name: info.name,
+				enabled: info.enabled,
+				description: info.description,
+				collectionId: info.collectionId ?? null,
+				sortOrder: info.sortOrder,
+				lastExecuted: info.lastExecuted,
+			}))
+			return textResult(triggers)
 		}
 	)
 
@@ -288,39 +274,40 @@ export function registerTriggerTools(server: McpServer, client: CompanionClient)
 		},
 		async () => {
 			const data = await getInitialData((observer) =>
-				client.controls.triggers.watch.subscribe(undefined, observer)
+				client.controls.triggers.collections.watchQuery.subscribe(undefined, observer)
 			)
-			if (data.type !== 'init') throw new Error('Expected init message')
-
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const collections = data.collections as Record<string, { name: string }> | undefined
-			const result = collections
-				? Object.entries(collections).map(([id, info]) => ({
-						collectionId: id,
-						name: info.name,
-					}))
-				: []
-
-			return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+			const flatten = (items: any[], parentId: string | null, out: any[]) => {
+				for (const item of items ?? []) {
+					out.push({
+						collectionId: item.id,
+						name: item.label,
+						parentId,
+						sortOrder: item.sortOrder,
+						enabled: item.metaData?.enabled,
+					})
+					if (item.children) flatten(item.children, item.id, out)
+				}
+				return out
+			}
+			return textResult(Array.isArray(data) ? flatten(data, null, []) : data)
 		}
 	)
 
 	server.registerTool(
 		'get_trigger',
 		{
-			description:
-				'Get the full configuration of a trigger including its events, actions, and conditions',
+			description: 'Get the full configuration of a trigger including its events, actions, and conditions',
 			inputSchema: {
 				controlId: z.string().describe('The trigger controlId (e.g., "trigger:abc123")'),
 			},
 		},
 		async ({ controlId }) => {
-			const data = await getInitialData((observer) =>
-				client.controls.watchControl.subscribe({ controlId }, observer)
+			const data = expectInit(
+				await getInitialData((observer) => client.controls.watchControl.subscribe({ controlId }, observer)),
+				'controls.watchControl'
 			)
-			return {
-				content: [{ type: 'text', text: JSON.stringify({ controlId, ...data }, null, 2) }],
-			}
+			return textResult({ controlId, ...data })
 		}
 	)
 
@@ -342,29 +329,14 @@ export function registerTriggerTools(server: McpServer, client: CompanionClient)
 		async ({ name, enabled, collectionId, operations }) => {
 			const controlId = await client.controls.triggers.create.mutate()
 
-			// Apply basic options
 			const initOps: Operation[] = []
 			if (name !== undefined || enabled !== undefined || collectionId !== undefined) {
-				initOps.push({
-					op: 'set_options',
-					name,
-					enabled,
-					collectionId,
-				})
+				initOps.push({ op: 'set_options', name, enabled, collectionId })
 			}
 
-			// Combine with user-provided operations
 			const allOps = [...initOps, ...(operations ?? [])]
-			let results: OperationResult[] = []
-			if (allOps.length > 0) {
-				results = await executeOperations(client, controlId, allOps)
-			}
-
-			return {
-				content: [
-					{ type: 'text', text: JSON.stringify({ success: true, controlId, results }, null, 2) },
-				],
-			}
+			const results = allOps.length > 0 ? await executeOperations(client, controlId, allOps) : []
+			return textResult({ success: true, controlId, results })
 		}
 	)
 
@@ -372,14 +344,11 @@ export function registerTriggerTools(server: McpServer, client: CompanionClient)
 		'clone_trigger',
 		{
 			description:
-				'Clone an existing trigger. Creates a copy with a new name, optionally with modified options. Returns the new controlId.',
+				'Clone an existing trigger (Companion makes an exact copy), then optionally rename it, change its enabled state or collection, and override options on its actions/conditions. Entity IDs in optionOverrides refer to the SOURCE trigger; the copy\'s entities are matched by position.',
 			inputSchema: {
 				sourceControlId: z.string().describe('The trigger controlId to clone'),
-				name: z.string().describe('Name for the cloned trigger'),
-				enabled: z
-					.boolean()
-					.optional()
-					.describe('Whether the clone is enabled (defaults to source state)'),
+				name: z.string().optional().describe('Name for the cloned trigger (default: Companion\'s copy name)'),
+				enabled: z.boolean().optional().describe('Whether the clone is enabled (defaults to source state)'),
 				collectionId: z
 					.string()
 					.nullable()
@@ -389,9 +358,7 @@ export function registerTriggerTools(server: McpServer, client: CompanionClient)
 					.array(
 						z.object({
 							entityId: z.string().describe('Entity ID from the source trigger'),
-							entityLocation: z
-								.enum(['trigger_actions', 'feedbacks'])
-								.describe('Location of the entity'),
+							entityLocation: z.enum(['trigger_actions', 'feedbacks']).describe('Location of the entity'),
 							options: z.record(z.string(), z.unknown()).describe('Options to override'),
 						})
 					)
@@ -400,130 +367,53 @@ export function registerTriggerTools(server: McpServer, client: CompanionClient)
 			},
 		},
 		async ({ sourceControlId, name, enabled, collectionId, optionOverrides }) => {
-			// Get source trigger config
-			const sourceData = await getInitialData((observer) =>
-				client.controls.watchControl.subscribe({ controlId: sourceControlId }, observer)
-			)
-			if (sourceData.type !== 'init') throw new Error('Expected init message')
+			const newControlId: string | false = await client.controls.triggers.clone.mutate({ controlId: sourceControlId })
+			if (!newControlId) throw new Error('Companion could not clone the trigger (is the controlId a trigger?)')
 
-			const sourceConfig = sourceData.config
-			if (!sourceConfig || sourceConfig.type !== 'trigger') {
-				throw new Error('Source is not a trigger')
-			}
-
-			// Create new trigger
-			const newControlId = await client.controls.triggers.create.mutate()
-
-			// Build operations to replicate the source
 			const ops: Operation[] = []
-
-			// Set options
-			ops.push({
-				op: 'set_options',
-				name,
-				enabled: enabled ?? sourceConfig.options?.enabled ?? false,
-				collectionId: collectionId !== undefined ? collectionId : sourceConfig.options?.collectionId,
-			})
-
-			// Clone events
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const events = (sourceConfig.events ?? []) as Array<{ id: string; type: string; options: Record<string, any> }>
-			const eventIdMap: Record<string, string> = {}
-			for (const event of events) {
-				ops.push({ op: 'add_event', eventType: event.type })
+			if (name !== undefined || enabled !== undefined || collectionId !== undefined) {
+				ops.push({ op: 'set_options', name, enabled, collectionId })
 			}
 
-			// Execute initial ops to create events
-			const initialResults = await executeOperations(client, newControlId, ops)
-
-			// Map old event IDs to new event IDs
-			let eventIndex = 0
-			for (const result of initialResults) {
-				if (result.op === 'add_event' && result.eventId && events[eventIndex]) {
-					eventIdMap[events[eventIndex].id] = result.eventId
-					eventIndex++
-				}
-			}
-
-			// Set event options
-			const eventOps: Operation[] = []
-			for (const event of events) {
-				const newEventId = eventIdMap[event.id]
-				if (newEventId && event.options) {
-					for (const [key, value] of Object.entries(event.options)) {
-						eventOps.push({ op: 'update_event_options', eventId: newEventId, key, value })
+			if (optionOverrides && optionOverrides.length > 0) {
+				// Map source entity IDs to the clone's entity IDs by position
+				const [source, clone] = await Promise.all([
+					getInitialData((observer) => client.controls.watchControl.subscribe({ controlId: sourceControlId }, observer)),
+					getInitialData((observer) => client.controls.watchControl.subscribe({ controlId: newControlId }, observer)),
+				])
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				const collectIds = (entities: any[] | undefined, out: string[] = []): string[] => {
+					for (const e of entities ?? []) {
+						out.push(e.id)
+						for (const children of Object.values(e.children ?? {})) collectIds(children as [], out)
 					}
+					return out
 				}
-			}
-			if (eventOps.length > 0) {
-				await executeOperations(client, newControlId, eventOps)
-			}
-
-			// Clone conditions (feedbacks)
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const feedbacks = (sourceConfig.feedbacks ?? []) as Array<{
-				id: string
-				connectionId: string
-				definitionId: string
-				options: Record<string, unknown>
-				isInverted?: boolean
-			}>
-			const conditionOps: Operation[] = []
-			const conditionIdMap: Record<string, number> = {} // old id -> index in conditionOps
-			for (let i = 0; i < feedbacks.length; i++) {
-				const fb = feedbacks[i]
-				// Apply option overrides if any
-				let options = { ...fb.options }
-				const override = optionOverrides?.find(
-					(o) => o.entityId === fb.id && o.entityLocation === 'feedbacks'
-				)
-				if (override) {
-					options = { ...options, ...override.options }
+				const idMap = new Map<string, { id: string; location: 'trigger_actions' | 'feedbacks' }>()
+				for (const location of ['trigger_actions', 'feedbacks'] as const) {
+					const src = collectIds(source.config?.[location])
+					const dst = collectIds(clone.config?.[location])
+					src.forEach((id, i) => {
+						if (dst[i]) idMap.set(id, { id: dst[i], location })
+					})
 				}
-				conditionOps.push({
-					op: 'add_condition',
-					connectionId: fb.connectionId,
-					feedbackId: fb.definitionId,
-					options,
-				})
-				conditionIdMap[fb.id] = i
-			}
-
-			let conditionResults: OperationResult[] = []
-			if (conditionOps.length > 0) {
-				conditionResults = await executeOperations(client, newControlId, conditionOps)
-			}
-
-			// Set isInverted on conditions
-			const invertOps: Operation[] = []
-			for (let i = 0; i < feedbacks.length; i++) {
-				const fb = feedbacks[i]
-				if (fb.isInverted && conditionResults[i]?.entityId) {
-					invertOps.push({
-						op: 'set_entity_inverted',
-						entityId: conditionResults[i].entityId!,
-						isInverted: true,
-						entityLocation: 'feedbacks',
+				for (const override of optionOverrides) {
+					const mapped = idMap.get(override.entityId)
+					if (!mapped) {
+						ops.push({ op: 'update_entity_options', entityId: override.entityId, options: override.options })
+						continue
+					}
+					ops.push({
+						op: 'update_entity_options',
+						entityId: mapped.id,
+						entityLocation: mapped.location,
+						options: override.options,
 					})
 				}
 			}
-			if (invertOps.length > 0) {
-				await executeOperations(client, newControlId, invertOps)
-			}
 
-			// Clone actions (trigger_actions) - recursively handles nested children
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const actions = (sourceConfig.trigger_actions ?? []) as Array<any>
-			await cloneActions(client, newControlId, actions, null, optionOverrides)
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: JSON.stringify({ success: true, controlId: newControlId, clonedFrom: sourceControlId }, null, 2),
-					},
-				],
-			}
+			const results = ops.length > 0 ? await executeOperations(client, newControlId, ops) : []
+			return textResult({ success: true, controlId: newControlId, clonedFrom: sourceControlId, results })
 		}
 	)
 
@@ -536,10 +426,8 @@ export function registerTriggerTools(server: McpServer, client: CompanionClient)
 			},
 		},
 		async ({ name }) => {
-			const collectionId = await client.controls.triggers.collections.add.mutate({
-				collectionName: name,
-			})
-			return { content: [{ type: 'text', text: JSON.stringify({ success: true, collectionId }) }] }
+			const collectionId = await client.controls.triggers.collections.add.mutate({ collectionName: name })
+			return textResult({ success: true, collectionId })
 		}
 	)
 
@@ -553,7 +441,21 @@ export function registerTriggerTools(server: McpServer, client: CompanionClient)
 		},
 		async ({ controlId }) => {
 			await client.controls.triggers.delete.mutate({ controlId })
-			return { content: [{ type: 'text', text: JSON.stringify({ success: true }) }] }
+			return textResult({ success: true })
+		}
+	)
+
+	server.registerTool(
+		'test_trigger',
+		{
+			description: 'Run the actions of a trigger once, now, regardless of its events (same as "Test actions" in the UI)',
+			inputSchema: {
+				controlId: z.string().describe('The trigger controlId'),
+			},
+		},
+		async ({ controlId }) => {
+			await client.controls.triggers.testActions.mutate({ controlId })
+			return textResult({ success: true })
 		}
 	)
 
@@ -567,16 +469,12 @@ IMPORTANT: Always call get_trigger first to read the current trigger state befor
 ${operationsDescription}`,
 			inputSchema: {
 				controlId: z.string().describe('The trigger controlId'),
-				operations: z
-					.array(operationSchema)
-					.describe('Array of operations to perform on the trigger'),
+				operations: z.array(operationSchema).describe('Array of operations to perform on the trigger'),
 			},
 		},
 		async ({ controlId, operations }) => {
 			const results = await executeOperations(client, controlId, operations)
-			return {
-				content: [{ type: 'text', text: JSON.stringify({ controlId, results }, null, 2) }],
-			}
+			return textResult({ controlId, results })
 		}
 	)
 
@@ -595,79 +493,19 @@ ${operationsDescription}`,
 					.array(
 						z.object({
 							controlId: z.string().describe('The trigger controlId'),
-							operations: z
-								.array(operationSchema)
-								.describe('Array of operations to perform on this trigger'),
+							operations: z.array(operationSchema).describe('Array of operations to perform on this trigger'),
 						})
 					)
 					.describe('Array of trigger updates to perform'),
 			},
 		},
 		async ({ items }) => {
-			const triggerResults: Array<{
-				controlId: string
-				results: OperationResult[]
-			}> = []
-
+			const triggerResults: Array<{ controlId: string; results: OperationResult[] }> = []
 			for (const item of items) {
 				const results = await executeOperations(client, item.controlId, item.operations)
 				triggerResults.push({ controlId: item.controlId, results })
 			}
-
-			return {
-				content: [{ type: 'text', text: JSON.stringify({ triggerResults }, null, 2) }],
-			}
+			return textResult({ triggerResults })
 		}
 	)
-}
-
-// Helper to recursively clone actions including nested children
-async function cloneActions(
-	client: CompanionClient,
-	controlId: string,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	actions: Array<any>,
-	parent: { parentId: string; childGroup: string } | null,
-	optionOverrides?: Array<{
-		entityId: string
-		entityLocation: 'trigger_actions' | 'feedbacks'
-		options: Record<string, unknown>
-	}>
-): Promise<void> {
-	for (const action of actions) {
-		// Apply option overrides if any
-		let options = { ...action.options }
-		const override = optionOverrides?.find(
-			(o) => o.entityId === action.id && o.entityLocation === 'trigger_actions'
-		)
-		if (override) {
-			options = { ...options, ...override.options }
-		}
-
-		// Add the action
-		const addOp: Operation = {
-			op: 'add_action',
-			connectionId: action.connectionId,
-			actionId: action.definitionId,
-			options,
-			...(parent ? { parentId: parent.parentId, childGroup: parent.childGroup } : {}),
-		}
-		const results = await executeOperations(client, controlId, [addOp])
-		const newEntityId = results[0]?.entityId
-
-		// Handle nested children (e.g., logic_if children)
-		if (newEntityId && action.children) {
-			for (const [childGroup, childActions] of Object.entries(action.children)) {
-				if (Array.isArray(childActions) && childActions.length > 0) {
-					await cloneActions(
-						client,
-						controlId,
-						childActions,
-						{ parentId: newEntityId, childGroup },
-						optionOverrides
-					)
-				}
-			}
-		}
-	}
 }

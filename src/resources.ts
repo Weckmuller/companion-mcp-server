@@ -1,100 +1,86 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CompanionClient } from './trpc-client.js'
-import { getInitialData } from './trpc-client.js'
+import { expectInit, getInitialData } from './trpc-client.js'
 
 const USAGE_GUIDE = `# Bitfocus Companion MCP Server - Usage Guide
 
 ## Overview
-This MCP server connects to a running Bitfocus Companion instance and exposes tools
-to manage buttons, triggers, connections, and variables.
+This MCP server connects to a running Bitfocus Companion (5.x) instance and exposes tools
+to manage buttons, triggers, connections, variables and surfaces (Stream Decks and other panels).
 
 ## Key Concepts
 
 ### Connections
-Connections are integrations with external devices/software (video switchers, audio mixers,
-lighting controllers, streaming software, etc.). Each connection has a unique ID and label.
-Use \`list_connections\` to see all configured connections and their IDs.
+Connections are integrations with external devices/software (video switchers, media servers,
+lighting controllers, OSC targets...). Each connection has an ID (used in add_action/add_feedback)
+and a label (used in variable references like \`$(label:variable)\`).
+Use \`list_connections\` to see them.
 
-### Pages
-Pages organize buttons into groups. Each page has a name and a grid of buttons.
-Use \`list_pages\` to see all pages. Manage pages with:
-- \`create_page\` - create new page(s) at a position
-- \`remove_page\` - delete a page and all its controls
-- \`set_page_name\` - rename a page
-- \`move_page\` - reorder a page
-- \`clear_page\` - reset a page to defaults
+### Pages and the grid
+Pages organise buttons in a grid. Rows and columns are 0-based; pages are 1-based. The grid can
+be bigger than any one surface: a surface shows the window of the grid given by its xOffset/yOffset
+and its size (e.g. two Stream Deck XLs side by side cover columns 0-7 and 8-15 of a 16x4 grid).
+Use \`list_pages\` to see pages and which positions hold buttons.
 
 ### Buttons
-Buttons are arranged on pages in a grid (rows and columns). Each button can have:
-- **Style**: Text, text color, background color, font size. Supports variable references like \`$(connectionLabel:variableName)\` for dynamic text.
-- **Actions**: What happens when pressed (e.g., switch camera, change scene)
-- **Feedbacks**: Dynamic styling based on device state (e.g., highlight when a source is live)
+Companion 5 buttons are "layered": their look is a stack of style elements (canvas, a background
+box, a text element, optional images/shapes). \`update_button\` with \`set_style\` edits the default
+text and background; \`set_element_options\` and \`add_element\` give full control. Buttons also have:
+- **Actions** in steps and action sets ("down" = press, "up" = release, numbers = hold durations)
+- **Feedbacks**: dynamic styling or conditions driven by device state
 
-Buttons are addressed by page number (1-based), row, and column.
+Option values are plain values; pass \`{ "value": "...", "isExpression": true }\` to use an expression.
 
 ### Triggers
-Triggers are automated workflows that execute actions based on events:
-- Time intervals
-- Variable changes
-- Startup events
-
-Each trigger has a controlId used to reference it.
+Triggers run actions on events (interval, time of day, variable changed, condition true, startup...).
+Each trigger has a controlId like \`trigger:abc123\`.
 
 ### Variables
-Variables hold dynamic values from connections or user-defined custom values.
-Referenced as \`$(connectionLabel:variableName)\`.
+Variables hold values from connections or custom (user) values, referenced as \`$(label:name)\`.
+Custom variables live under the label \`custom\`.
+
+### Surfaces
+Surfaces are Stream Decks, X-keys, emulators, satellite panels... Each belongs to a group (an
+"auto group" with the same id as the surface, unless you create manual groups). The group decides
+the current page, the startup page and page restrictions; the surface itself has brightness,
+rotation and grid offsets. Surfaces are listed even when disconnected, so a deck can be configured
+before it is plugged in. Panel config (brightness etc.) can only be changed while connected.
 
 ## Common Workflows
 
-### Create a page with buttons:
-1. \`create_page\` with a name and position
-2. \`list_connections\` - find the connection ID
-3. \`list_connection_definitions\` with the connection ID - find action/feedback IDs and their options
-4. \`create_button\` at the desired location on the new page
-5. \`update_button\` with operations:
-   - \`set_style\` to set text and colors (use \`$(label:var)\` for dynamic text)
-   - \`add_action\` to add the action
-   - \`add_feedback\` to add visual feedback
-   - \`update_entity_options\` to configure action and feedback options (works for both)
-
-### Modify an existing button:
-1. \`get_button\` - read the current button state to understand existing actions, feedbacks, style, and entity IDs
-2. \`update_button\` with the needed operations based on the current state
-
-### Modify an existing trigger:
-1. \`get_trigger\` - read the current trigger state to understand existing events, actions, conditions, and entity IDs
-2. \`update_trigger\` with the needed operations based on the current state
-
-### Create a button that performs an action:
+### Build a button
 1. \`list_connections\` - find the connection ID
-2. \`list_connection_definitions\` with the connection ID - find the action ID and its options
-3. \`create_button\` at the desired location
-4. \`update_button\` with operations:
-   - \`set_style\` to set text and colors
-   - \`add_action\` to add the action
-   - \`update_entity_options\` to configure the action's options
+2. \`list_connection_definitions\` (compact=true, search=...) - find the action/feedback IDs and option keys
+3. \`create_button\` at the location
+4. \`update_button\` with \`set_style\`, \`add_action\` (with options), \`add_feedback\`
 
-### Create a trigger:
-1. \`create_trigger\` - get the new controlId
-2. \`update_trigger\` with operations:
-   - \`set_options\` to set name and enable it
-   - \`add_event\` to define when it fires
-   - \`update_event_options\` to configure the event
-   - \`add_action\` to define what happens
-   - \`update_entity_options\` to configure the action
+### Place a preset
+1. \`list_presets\` for the connection
+2. \`import_preset\` at the location
 
-### Read current state:
-- \`list_pages\` - see all pages and their button grid
-- \`get_button\` - inspect a specific button's full config
-- \`list_triggers\` - see all triggers
-- \`list_variables\` - see all available variables
-- \`get_variable_value\` - read a specific variable's current value
+### Change an existing button
+1. \`get_button\` - read style elements, actions and feedbacks with their IDs
+2. \`update_button\` with the needed operations
+
+### Configure a Stream Deck
+1. \`list_surfaces\` - find the surfaceId, its group and current settings
+2. \`set_surface_group_config\` - startup_page, use_last_page, page (switch now), restrict_pages...
+3. \`set_surface_config\` - brightness, rotation, xOffset/yOffset (connected surfaces only)
+4. \`set_surface_name\`, \`create_surface_group\` + \`set_surface_group\` to make two decks act as one
+
+### Create a trigger
+1. \`create_trigger\` with name, enabled and operations (add_event with options, add_action with options)
+2. \`test_trigger\` to run its actions once
 
 ## Entity Locations
-- Button actions use location \`{ stepId: '0', setId: 'down' }\` (press-down actions in the default step)
+- Button actions use location \`{ stepId: '0', setId: 'down' }\` by default
 - Button feedbacks use location \`'feedbacks'\`
 - Trigger actions use location \`'trigger_actions'\`
 - Trigger conditions use location \`'feedbacks'\`
+
+## Colours
+Colours are decimal RGB numbers: white 16777215, black 0, red 16711680, green 65280, blue 255,
+yellow 16776960, orange 16744448, dark grey 2500134.
 `
 
 export function registerResources(server: McpServer, client: CompanionClient): void {
@@ -118,10 +104,10 @@ export function registerResources(server: McpServer, client: CompanionClient): v
 		'companion://connections',
 		{ description: 'Summary of all configured connections with their IDs, labels, module types, and enabled state' },
 		async () => {
-			const raw = await getInitialData((observer) => client.instances.connections.watch.subscribe(undefined, observer))
-			// connections.watch yields an array of updates; the first element is the init message
-			const data = Array.isArray(raw) ? raw[0] : raw
-			if (data.type !== 'init') throw new Error('Expected init message')
+			const data = expectInit(
+				await getInitialData((observer) => client.instances.connections.watch.subscribe(undefined, observer)),
+				'instances.connections.watch'
+			)
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const connections = Object.entries(data.info as Record<string, any>).map(([id, config]) => ({
@@ -162,10 +148,10 @@ export function registerResources(server: McpServer, client: CompanionClient): v
 				'Summary of all available presets grouped by connection, showing categories and preset names. Presets are pre-configured button templates provided by connection modules.',
 		},
 		async () => {
-			const data = await getInitialData((observer) =>
-				client.instances.definitions.presets.subscribe(undefined, observer)
+			const data = expectInit(
+				await getInitialData((observer) => client.instances.definitions.presets.subscribe(undefined, observer)),
+				'definitions.presets'
 			)
-			if (data.type !== 'init') throw new Error('Expected init message')
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const definitions = data.definitions as Record<string, Record<string, any>>
@@ -181,7 +167,6 @@ export function registerResources(server: McpServer, client: CompanionClient): v
 					const presetList = Object.values(presets)
 					if (presetList.length === 0) continue
 
-					// Group by category
 					const categories: Record<string, Array<{ id: string; label: string; type: string }>> = {}
 					for (const preset of presetList) {
 						const cat = preset.category || 'Uncategorized'
