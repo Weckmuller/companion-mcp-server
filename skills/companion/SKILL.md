@@ -22,8 +22,8 @@ node <server-dir>/scripts/call.mjs [--url http://host:8000] <tool> '<json-argume
 node <server-dir>/scripts/call.mjs list-tools
 ```
 
-`<server-dir>` is the companion-mcp-server checkout. On this workspace it is
-`C:/Projetos/MATA/companion-mcp-server`; see `references/setup-mata.md` for the machines and URLs.
+`<server-dir>` is the companion-mcp-server checkout; the house setup file (`references/setup-mata.md`
+in this workspace) gives its path, the machines and the URLs.
 Arguments are JSON on one line, exactly as an MCP call would send them. `list-tools` prints each
 tool with its parameter names and types; `describe <tool>` prints the full schema. Check the
 parameters before the first call to a tool rather than guessing them (`create_page`, for example,
@@ -102,9 +102,9 @@ another button, wait, if/else logic, variable checks) is catalogued with option 
   "operations": [
     { "op": "set_style", "text": "FADE\n2 s", "color": 16777215, "bgcolor": 1127526, "size": "auto" },
     { "op": "add_action", "connectionId": "<id>", "actionId": "send_int",
-      "options": { "path": "/mata/fadetime", "int": 2 } },
+      "options": { "path": "/show/fadetime", "int": 2 } },
     { "op": "add_feedback", "connectionId": "internal", "feedbackId": "variable_value",
-      "options": { "variable": "custom:smode_trans", "op": "eq", "value": "FADE 2 s" } },
+      "options": { "variable": "custom:show_trans", "op": "eq", "value": "FADE 2 s" } },
     { "op": "set_feedback_style", "entityId": "<feedback entityId from the previous result>",
       "elementId": "box0", "property": "color", "value": 65280 }
   ]
@@ -150,7 +150,7 @@ Limits that come from the nature of the system, not from caution for its own sak
 - **Page numbers are referenced by other things** (page-switch actions, button references, surface
   startup pages). Inserting or moving a page shifts the numbers; do it only when asked and warn
   about the consequences.
-- **The grid has a size** (Settings; default 8×4, here 16×4). `create_button` outside it fails
+- **The grid has a size** (Settings; default 8×4; two XLs side by side need 16×4). `create_button` outside it fails
   with a clear message; check `list_surfaces` sizes and offsets to know which positions a deck
   actually shows.
 
@@ -181,8 +181,8 @@ Everything that changes a button is an operation inside `update_button`'s `opera
 - Option values are plain JSON. To use an expression pass `{ "value": "<expr>", "isExpression": true }`.
 - Colours are decimal RGB integers: white 16777215 (`0xffffff`), red 16711680, green 65280,
   blue 255, dark grey 2500134. Convert hex for the user in reports.
-- `set_style` `size` is a percentage of the text element's height (24 is a normal label, the
-  existing show buttons use 24); shrink-to-fit stays on, so long text still fits. `"auto"` only
+- `set_style` `size` is a percentage of the text element's height (24 is a normal label);
+  match the size of the surrounding buttons; shrink-to-fit stays on, so long text still fits. `"auto"` only
   turns shrink-to-fit on.
 - A feedback's style override targets an element id (`box0`, `text0`, or the id from
   `get_button` → `style.elements`), not "the button". Companion attaches **default overrides**
@@ -217,7 +217,10 @@ check with `list_connections` (cheapest call) and report the URL you used.
 - `references/internal-entities.md`: generated catalogue of trigger event types and of the
   `internal` connection's actions and feedbacks with their option keys (regenerate with
   `node scripts/dump-internal-reference.mjs` after a Companion update).
-- `references/setup-mata.md`: this workspace's machines, Companion URLs, surfaces, show pages and
-  house rules. Read it first when working on the MATA setup.
+- `references/setup-mata.md`: this workspace's machines, Companion URLs, surfaces, show pages,
+  house rules, and the generate-and-replay workflow for a show deck (`replay.mjs`, the deck
+  generator, the feedback variables and the UDP fast path). Read it first when working on the MATA
+  setup. The production's own deck layout and variables are in the show-type skill's reference file
+  (for a corporate show: `corporate-show/references/`).
 - `docs/COMPANION-API.md` in the server repo: how the tools map onto Companion's internal API,
   for when a tool misbehaves after a Companion update.
