@@ -197,6 +197,20 @@ Everything that changes a button is an operation inside `update_button`'s `opera
   that target "all surfaces" may need to include it.
 - Companion's admin interface has no authentication. Only point the tools at an instance the user
   administers.
+- `clear_page` is not "empty the page": it resets the page's name to PAGE and puts the default
+  page-up / number / down keys back in column 0. To empty a page, delete its keys.
+- A hold ("duration") group does not exist on a new key, and `add_action` with a numeric `setId`
+  fails until it does. Create it through Companion's own API (`scripts/trpc.mjs`,
+  `controls.actionSets.add`), then add the action. `press_button` and HTTP `/press` are taps: to
+  fire a hold from a test, send HTTP `/down`, wait, `/up`.
+- Companion is not an animation engine. Clock-driven expressions (`oscillate`, `blink`) redraw a
+  key at most 10 times a second in theory and under 5 in practice, and a page full of animated
+  elements falls below 1. Pulse a colour or an opacity; do not try to play frames.
+- Settings, adding connections and reading a key's rendered picture are outside the tools:
+  `node scripts/trpc.mjs <url> query|mutate|watch <procedure> ['<json>']` calls Companion's own
+  API (procedures in the house file and in `docs/COMPANION-API.md`).
+- A full export without the UI: `GET http://<companion>/int/export/full?format=json`. Save one
+  before a risky change; `scripts/replay.mjs <file> --url <companion> --pages <n>` puts a page back.
 
 ## When something fails
 
@@ -218,8 +232,8 @@ check with `list_connections` (cheapest call) and report the URL you used.
   `internal` connection's actions and feedbacks with their option keys (regenerate with
   `node scripts/dump-internal-reference.mjs` after a Companion update).
 - `references/setup-mata.md`: this workspace's machines, Companion URLs, surfaces, show pages,
-  house rules, and the generate-and-replay workflow for a show deck (`replay.mjs`, the deck
-  generator, the feedback variables and the UDP fast path). Read it first when working on the MATA
+  house rules, which script writes which page, how the decks lock with the desks, and the calls
+  the tools cannot make. Read it first when working on the MATA
   setup. The production's own deck layout and variables are in the show-type skill's reference file
   (for a corporate show: `corporate-show/references/`).
 - `docs/COMPANION-API.md` in the server repo: how the tools map onto Companion's internal API,

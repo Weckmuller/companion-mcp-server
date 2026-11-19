@@ -97,6 +97,25 @@ Action set IDs: `'down'`, `'up'`, `'rotate_left'`, `'rotate_right'`, or a number
 `pages.insert / remove / setName / move / clearPage`, `customVariables.create / setCurrent /
 setDefault / setDescription / delete`. These are unchanged since 4.x.
 
+## Outside the tools: `scripts/trpc.mjs`
+
+`node scripts/trpc.mjs <url> query|mutate|watch <procedure> ['<json input>']` calls any procedure.
+Checked against 5.1.2:
+
+| Need | Procedure |
+|------|-----------|
+| Settings | `userConfig.getConfig` (query), `userConfig.setConfigKeys({ values })`, `userConfig.setConfigKey({ key, value })` |
+| Connections | `instances.connections.add({ module: { type }, label, versionId })` → id; `.setConfig({ connectionId, label, config })`; `.watchEdit({ connectionId })` (config and fields); `.setEnabled`, `.delete` |
+| Hold groups | `controls.actionSets.add({ controlId, stepId })` (creates set 1000), `.rename({ controlId, stepId, oldSetId, newSetId })`, `.setRunWhileHeld({ controlId, stepId, setId, runWhileHeld })`, `.remove` |
+| Rendered key | `preview.graphics.location({ location: { pageNumber, row, column }, size: { width, height } })` (subscription; `{ image: <PNG data URL> }` on every redraw) |
+| Full export | not tRPC: `GET /int/export/full?format=json` |
+
+`scripts/replay.mjs <file.companionconfig> --url <companion> [--pages 1,2] [--insert-at N]` rebuilds
+pages from an export through the tools in one process. It carries text, colours, size, extra style
+elements, step 0's press actions and feedbacks with their overrides; it does not carry
+expression-valued style properties, notes or hold groups, and without `--pages` it clears every
+page the file names.
+
 ## Checking a new Companion version
 
 Companion ships its backend as `main.js` with a source map that includes the original TypeScript.
