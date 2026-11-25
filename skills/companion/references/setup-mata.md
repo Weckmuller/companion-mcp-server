@@ -151,8 +151,9 @@ operators of the parsecs". State on both NUCs:
 
 - **Where:** `C:\Smode Compose\R15-15.12.63359d32eb\Smode.exe`, one folder per version (older ones stay for
   rollback), Start menu shortcut `Smode > Smode Compose R15-15.12.63359d32eb`. Zip and installers in
-  `C:\smode_install\` (`r15-12\` zip, `CodeMeterRuntime64.msi` 8.40d, `nuc_compose_install.ps1`; the script's
-  source is `C:\Projetos\MATA\smode_install\nuc_compose_install.ps1`). No Launcher and no SmodeBoot on the NUCs: on
+  `C:\smode_install\` (`r15-12\` zip, `CodeMeterRuntime64.msi` 8.40d, `nuc_compose_install.ps1`,
+  `nuc_codemeter_install.ps1`, `nuc_compose_start.ps1`, `nuc_desk_grab.ps1`, `interactive-task.ps1`; the sources
+  are in `C:\Projetos\MATA\smode_install\` on the notebook, not in a repository). No Launcher and no SmodeBoot on the NUCs: on
   a station they would start Smode at every logon and want a 10.0.0.x address. Nothing Smode starts at logon.
 - **Next version:** copy the zip to `C:\smode_install\<release>\` and run
   `powershell -NoProfile -ExecutionPolicy Bypass -File C:\smode_install\nuc_compose_install.ps1 -Zip <zip>`: it
@@ -160,20 +161,30 @@ operators of the parsecs". State on both NUCs:
 - **Smode Net binding:** `C:\ProgramData\SmodeTech\SmodeNet\SmodeNet.configuration` =
   `smodeNetLocalIp = "2.0.0.31"` / `"2.0.0.32"` (the venue NIC; "Any" could pick the NetBird tunnel). Change it if a
   NUC ever gets a 10.0.0.x leg.
-- **Licence:** Compose needs its own (a CodeMeter dongle, or a CmActLicense bound to that NUC, activated by Gabriel
-  in Smode's licence web depot) and the CodeMeter Runtime. The runtime is staged, NOT installed: it adds services
-  `CodeMeter.exe` and `CmWebAdmin.exe` (automatic, localhost 22350/22352) and the `CodeMeterCC` tray, about
-  150 MB of RAM, as on the parsecs. Install with `msiexec /i C:\smode_install\CodeMeterRuntime64.msi /qn` on his word.
+- **Licence:** each NUC has a CodeMeter stick plugged in: NUC-01 container 3-8252365, NUC-02 3-8252366, each
+  "SMODE TECH" with "Smode Compose - Basic" (plus Video Export 4K, Video IO, Universe), valid until 2027-11-18.
+  CodeMeter Runtime 8.40d installed on both 2026-11-25 (`nuc_codemeter_install.ps1`, msiexec exit 0, no reboot):
+  services `CodeMeter.exe` and `CmWebAdmin.exe` (automatic, localhost 22350/22352) and the `CodeMeterCC` tray. List
+  the licences with `"C:\Program Files\CodeMeter\Runtime\bin\cmu32.exe" --list-content`.
+- **Compose crashes at start on both NUCs' graphics driver (2026-11-25):** ACCESS_VIOLATION reading 0x221 in
+  `igvk64.dll+0xA5ABD4` (Intel's Vulkan driver) about 4 s into start-up, while Smode's graphics library sets up its
+  Vulkan interop device; dumps in `%APPDATA%\Smode Compose\dumps` (read with Python `minidump`). Hiding the Vulkan
+  drivers from the process (`VK_LOADER_DRIVERS_DISABLE=*`, `nuc_compose_start.ps1 -NoVulkan`) did not help: the same
+  crash. The GPU runs Intel's OEM driver 31.0.101.3222 (2022, `oem57.inf` on NUC-02, `oem60.inf` on NUC-01); Intel's
+  32.0.101.7088 (2026-06-17, Microsoft-signed, lists `PCI\VEN_8086&DEV_9A49`) is staged in both driver stores
+  (`oem4.inf` / `oem22.inf`) but not in use, because the OEM driver matches the board's subsystem id more closely.
+  Intel's advice for Vulkan crashes is a driver update or clean install. Start Compose for a test in the console
+  session with `interactive-task.ps1 -Name compose-start-once -File C:\smode_install\nuc_compose_start.ps1`.
 - **What "editor" and "operator" mean in Smode:** no such roles or rights exist. A Compose connects to a running
   Smode Live engine from its NETWORK menu (remote connection) and then edits that engine's project and fires its
   cues like a seat at that server; its viewport comes back as NDI and is off while the server is On Air. The only
   brake is the UI Lock (Preferences > Application, optional password; whether it binds a remote editor is not
   documented). No topology change in the project is needed for a remote connection.
-- **Open, not yet tested (2026-11-25):** Compose has not been started on either NUC. Smode lists Intel GPUs as
-  unsupported (the NUCs have Iris Xe). The NUCs have no address on the 10.0.0.x Smode Net network, where the
-  servers' Launchers and discovery are pinned; the servers' Smode Net server itself listens on `0.0.0.0:5186`, so a
-  connection to `2.0.0.1x` by typed IP may work. No rule is documented for a 15.12 Compose against 15.11 servers.
-  A Compose session on NUC-01 shares the desk with the decks: try NUC-02 first.
+- **Open (2026-11-25):** Compose has not run on either NUC yet (the crash above; Smode lists Intel GPUs as
+  unsupported). The NUCs have no address on the 10.0.0.x Smode Net network, where the servers' Launchers and
+  discovery are pinned; the servers' Smode Net server itself listens on `0.0.0.0:5186`, so a connection to
+  `2.0.0.1x` by typed IP may work. No rule is documented for a 15.12 Compose against 15.11 servers. A Compose
+  session on NUC-01 shares the desk with the decks: try NUC-02 first.
 
 ## Updating Companion on a NUC
 
