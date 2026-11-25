@@ -166,15 +166,18 @@ operators of the parsecs". State on both NUCs:
   CodeMeter Runtime 8.40d installed on both 2026-11-25 (`nuc_codemeter_install.ps1`, msiexec exit 0, no reboot):
   services `CodeMeter.exe` and `CmWebAdmin.exe` (automatic, localhost 22350/22352) and the `CodeMeterCC` tray. List
   the licences with `"C:\Program Files\CodeMeter\Runtime\bin\cmu32.exe" --list-content`.
-- **Compose crashes at start on both NUCs' graphics driver (2026-11-25):** ACCESS_VIOLATION reading 0x221 in
-  `igvk64.dll+0xA5ABD4` (Intel's Vulkan driver) about 4 s into start-up, while Smode's graphics library sets up its
-  Vulkan interop device; dumps in `%APPDATA%\Smode Compose\dumps` (read with Python `minidump`). Hiding the Vulkan
-  drivers from the process (`VK_LOADER_DRIVERS_DISABLE=*`, `nuc_compose_start.ps1 -NoVulkan`) did not help: the same
-  crash. The GPU runs Intel's OEM driver 31.0.101.3222 (2022, `oem57.inf` on NUC-02, `oem60.inf` on NUC-01); Intel's
-  32.0.101.7088 (2026-06-17, Microsoft-signed, lists `PCI\VEN_8086&DEV_9A49`) is staged in both driver stores
-  (`oem4.inf` / `oem22.inf`) but not in use, because the OEM driver matches the board's subsystem id more closely.
-  Intel's advice for Vulkan crashes is a driver update or clean install. Start Compose for a test in the console
-  session with `interactive-task.ps1 -Name compose-start-once -File C:\smode_install\nuc_compose_start.ps1`.
+- **Compose 15.12 does not run on the NUCs' Intel Iris Xe (2026-11-25):** it crashes about 4 s into start-up,
+  as its interface client starts drawing, with an ACCESS_VIOLATION in `igvk64.dll` (Intel's Vulkan driver), called
+  from the same `Smode.exe` code each time. Tried on NUC-02: Intel's OEM driver 31.0.101.3222 (2022, the one in use,
+  `oem57.inf`; NUC-01 `oem60.inf`): crash at `igvk64.dll+0xA5ABD4`; the same with the Vulkan drivers hidden from the
+  process (`VK_LOADER_DRIVERS_DISABLE=*`, `nuc_compose_start.ps1 -NoVulkan`); Intel 32.0.101.7088 (2026-06-17,
+  staged in both driver stores, `oem4.inf` / `oem22.inf`), forced on with Gabriel's OK: crash at `igvk64.dll+0xF41AA`.
+  NUC-02 was put back on 31.0.101.3222 (both NUCs equal again). Smode's requirements say "Intel, Matrox or other GPU
+  are not supported"; no Smode-specific report was found online. Dumps in `%APPDATA%\Smode Compose\dumps` on NUC-02
+  (read with Python `minidump`). `C:\smode_install\nuc_gpu_driver.ps1` shows the driver and switches between the
+  staged packages (`-Version <x>`, newdev.dll forced update, no reboot was asked; the screen blanks a few seconds and
+  Companion's GPU helper process restarts). Start Compose for a test in the console session with
+  `interactive-task.ps1 -Name compose-start-once -File C:\smode_install\nuc_compose_start.ps1`.
 - **What "editor" and "operator" mean in Smode:** no such roles or rights exist. A Compose connects to a running
   Smode Live engine from its NETWORK menu (remote connection) and then edits that engine's project and fires its
   cues like a seat at that server; its viewport comes back as NDI and is off while the server is On Air. The only
