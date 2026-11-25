@@ -11,6 +11,9 @@ true. The current production's own keys and looks are in the show-type skill's r
 |---|---|---|
 | NUC-01 (2.0.0.31) | 5.1.2 | **The show's Companion.** Both Stream Deck XLs are plugged into it. Admin and HTTP API bound to 2.0.0.31:8000. |
 | NUC-02 (2.0.0.32) | 5.1.2 (since 2026-11-19) | **Spare, a copy of NUC-01**: same settings, connections, variables and pages. No deck is plugged in; if NUC-01 fails the decks move here. Bound to 2.0.0.32:8000. Keep it equal to NUC-01: whatever you change there, change here. |
+
+Both NUCs: Intel NUC11PAHi5 (i5-1135G7, Iris Xe, 24 GB), Windows 11 Pro 26200, one wired NIC on 2.0.0.x (no 10.0.0.x
+leg), NetBird, Windows firewall off; they also carry Smode Compose (section "Smode Compose on the NUCs").
 | Notebook (Gabriel's working machine) | 5.1.2 | For experiments only. Companion is usually not running, no deck is plugged in, and its pages are older than the NUCs'. `http://127.0.0.1:8000` when started. |
 
 **Reaching the NUCs.** On the venue network: `http://2.0.0.31:8000`, `http://2.0.0.32:8000`, `ssh nuc01`, `ssh nuc02`.
@@ -140,6 +143,37 @@ Use Companion's own API through `node scripts/trpc.mjs <url> query|mutate|watch 
 | A hold group on a key | `controls.actionSets.add {controlId, stepId:"0"}` (creates set 1000), `.rename`, `.setRunWhileHeld`; then `add_action` with `setId: 1000` |
 | A key's rendered picture | `preview.graphics.location {location:{pageNumber,row,column}, size:{width:96,height:96}}` (subscription, PNG data URL) |
 | Fire a hold from a test | HTTP `POST /api/location/<p>/<r>/<c>/down`, wait, then `/up` (`/press` is a tap) |
+
+## Smode Compose on the NUCs (editor stations; since 2026-11-25)
+
+Gabriel (2026-11-25): "smode compose is supposed to be installed in the nucs configured to connect as editors and
+operators of the parsecs". State on both NUCs:
+
+- **Where:** `C:\Smode Compose\R15-15.12.63359d32eb\Smode.exe`, one folder per version (older ones stay for
+  rollback), Start menu shortcut `Smode > Smode Compose R15-15.12.63359d32eb`. Zip and installers in
+  `C:\smode_install\` (`r15-12\` zip, `CodeMeterRuntime64.msi` 8.40d, `nuc_compose_install.ps1`; the script's
+  source is `C:\Projetos\MATA\smode_install\nuc_compose_install.ps1`). No Launcher and no SmodeBoot on the NUCs: on
+  a station they would start Smode at every logon and want a 10.0.0.x address. Nothing Smode starts at logon.
+- **Next version:** copy the zip to `C:\smode_install\<release>\` and run
+  `powershell -NoProfile -ExecutionPolicy Bypass -File C:\smode_install\nuc_compose_install.ps1 -Zip <zip>`: it
+  unpacks at Idle priority beside the others, adds a shortcut and pins Smode Net (it starts nothing).
+- **Smode Net binding:** `C:\ProgramData\SmodeTech\SmodeNet\SmodeNet.configuration` =
+  `smodeNetLocalIp = "2.0.0.31"` / `"2.0.0.32"` (the venue NIC; "Any" could pick the NetBird tunnel). Change it if a
+  NUC ever gets a 10.0.0.x leg.
+- **Licence:** Compose needs its own (a CodeMeter dongle, or a CmActLicense bound to that NUC, activated by Gabriel
+  in Smode's licence web depot) and the CodeMeter Runtime. The runtime is staged, NOT installed: it adds services
+  `CodeMeter.exe` and `CmWebAdmin.exe` (automatic, localhost 22350/22352) and the `CodeMeterCC` tray, about
+  150 MB of RAM, as on the parsecs. Install with `msiexec /i C:\smode_install\CodeMeterRuntime64.msi /qn` on his word.
+- **What "editor" and "operator" mean in Smode:** no such roles or rights exist. A Compose connects to a running
+  Smode Live engine from its NETWORK menu (remote connection) and then edits that engine's project and fires its
+  cues like a seat at that server; its viewport comes back as NDI and is off while the server is On Air. The only
+  brake is the UI Lock (Preferences > Application, optional password; whether it binds a remote editor is not
+  documented). No topology change in the project is needed for a remote connection.
+- **Open, not yet tested (2026-11-25):** Compose has not been started on either NUC. Smode lists Intel GPUs as
+  unsupported (the NUCs have Iris Xe). The NUCs have no address on the 10.0.0.x Smode Net network, where the
+  servers' Launchers and discovery are pinned; the servers' Smode Net server itself listens on `0.0.0.0:5186`, so a
+  connection to `2.0.0.1x` by typed IP may work. No rule is documented for a 15.12 Compose against 15.11 servers.
+  A Compose session on NUC-01 shares the desk with the decks: try NUC-02 first.
 
 ## Updating Companion on a NUC
 
