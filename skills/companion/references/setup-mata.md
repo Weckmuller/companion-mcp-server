@@ -180,10 +180,17 @@ operators of the parsecs". State on both NUCs:
   cues like a seat at that server; its viewport comes back as NDI and is off while the server is On Air. The only
   brake is the UI Lock (Preferences > Application, optional password; whether it binds a remote editor is not
   documented). No topology change in the project is needed for a remote connection.
+- **The NUCs cannot reach Smode Net (read 2026-11-25 on 15.12):** the servers' Smode (TCP/UDP 5186, UDP 1664)
+  and Launchers (1911) listen on `10.0.0.1x` only: `smodeNetLocalIp` in SmodeNet.configuration wins over the
+  engine's `listeningAddress 0.0.0.0`. The 10.0.0.0/24 network is the CRS518's `bridge` (sfp28-1..5 = the parsecs'
+  25G links, 10.0.0.1/24); the NUCs sit on 2.0.0.x behind sfp28-16. From NUC-02, TCP 5186 to 2.0.0.15, 2.0.0.11 and
+  10.0.0.15: no connect. Ways in (none applied, all Gabriel's call): a second NIC per NUC (USB / Thunderbolt) on a
+  free CRS518 port (sfp28-6..12, 14) added to `bridge`, 10.0.0.31 / .32 static without gateway, then
+  SmodeNet.configuration pinned to it (the documented same-subnet setup; discovery works); or routing through the
+  CRS (needs a route back to the NUCs on every parsec's 25G NIC, Windows answers from 10.0.0.1x only by that NIC;
+  no discovery across it; CPU-routed on the CRS). Rebinding the servers to "Any" made the Launchers flap (2026-11-05).
 - **Open (2026-11-25):** Compose has not run on either NUC yet (the crash above; Smode lists Intel GPUs as
-  unsupported). The NUCs have no address on the 10.0.0.x Smode Net network, where the servers' Launchers and
-  discovery are pinned; the servers' Smode Net server itself listens on `0.0.0.0:5186`, so a connection to
-  `2.0.0.1x` by typed IP may work. No rule is documented for a 15.12 Compose against 15.11 servers. A Compose
+  unsupported). The parsecs run Live 15.12 since 2026-11-25 18:20, the same build as the NUCs' Compose. A Compose
   session on NUC-01 shares the desk with the decks: try NUC-02 first.
 
 ## Updating Companion on a NUC
