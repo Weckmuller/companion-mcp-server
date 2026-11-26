@@ -194,6 +194,8 @@ operators of the parsecs". State on both NUCs:
   SmodeNet.configuration pinned to it (the documented same-subnet setup; discovery works); or routing through the
   CRS (needs a route back to the NUCs on every parsec's 25G NIC, Windows answers from 10.0.0.1x only by that NIC;
   no discovery across it; CPU-routed on the CRS). Rebinding the servers to "Any" made the Launchers flap (2026-11-05).
+- **On hold since 2026-11-26** (Gabriel: "lets put a hold on compose now"): nothing more on the NUCs for Compose
+  (no Launcher, no driver change, no support note) until he comes back to it; what is installed stays.
 - **Open (2026-11-25):** Compose has not run on either NUC yet (the crash above; Smode lists Intel GPUs as
   unsupported). The parsecs run Live 15.12 since 2026-11-25 18:20, the same build as the NUCs' Compose. A Compose
   session on NUC-01 shares the desk with the decks: try NUC-02 first.
