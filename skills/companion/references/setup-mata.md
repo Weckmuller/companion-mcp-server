@@ -72,11 +72,12 @@ over OSC only, never through Smode's REST API.
 | # | Name | Content | Written by |
 |---|---|---|---|
 | 1 | SUVINIL | The previous production's deck, kept as it was. Its look keys send that show's indices: do not use it on another project. | (kept; restorable from `smode-shows/companion/exports/NUC-01_full_2026-11-17.companionconfig` with `replay.mjs --pages 1`) |
-| 2 | MENU | Page switches: SYSTEM 2/2/15, CASAMENTO 2/3/13, SUVINIL 2/3/14, BACK 2/3/15 | by hand |
+| 2 | MENU | Page switches: SYSTEM 2/2/15, UPSCALE TEST 2/3/12 (page 7), CASAMENTO 2/3/13, SUVINIL 2/3/14, BACK 2/3/15 | by hand; 2/3/12 by `upscale_deck.py --setup` |
 | 3 | SYSTEM | Everything that is not the show: the H20 keys (right deck: presets 1/13-15, Release 2/15, brightness 0-100 % 3/8-13, Freeze 3/14, MENU 3/15), PHONES 3/1/0 (the clients' phone remote, green ON / red OFF), LOCK ALL 3/3/0 | H20 keys from the old export; the rest by `deck_system.mjs` |
 | 4 | the current show (CASAMENTO) | Look keys, transitions, PPT, status, TAKE / CANCEL: see the production's reference file | the production's deck script |
 | 5 | LOCK | Empty on purpose: desklock draws on the decks while the desks are locked | `deck_system.mjs` |
 | 6 | LOCKCTL | 6/0/0 sends every surface to LOCK, 6/0/1 back to the show page. desklock presses them over the HTTP API. Not for the operator, and no key links here. | `deck_system.mjs` |
+| 7 | UPSCALE | Gabriel's 4K upscale demonstration (`upscale-test.project`, since 2026-11-25): BLACK / TEST / PIXEL MAP 7/0/0-2, UPSCALE A / B / C 7/1/0-2, the rest a copy of page 4. Its UPSCALE keys send 3-5 only while the master runs upscale-test; with another project open they are drawn "waiting" and send nothing (rerun the script after every switch). `smode-shows/docs/upscale-test.md` | `smode-shows/tools/master/upscale_deck.py <url>` |
 
 Custom variables (`$(custom:...)`), pushed by the Smode master (over HTTP once a second; the clip readouts over the
 raw UDP API at up to 30 Hz, which never creates a variable: it must exist first): `smode_look`, `smode_next`,
@@ -90,7 +91,7 @@ not set them by hand during a show. The master pushes to NUC-01, NUC-02 and the 
   `node C:/Projetos/MATA/smode-shows/tools/deck_system.mjs <companion url> [--show <page>]`. It writes only its
   own keys, can be run again at any time, and creates the `desklock` connection when missing. Run it on both NUCs.
 - **The show page**: the production's own script, which writes one page only (for the current production
-  `smode-shows/tools/master/casamento_deck.py <url> --page 4`). A generated corporate deck
+  `smode-shows/tools/master/casamento_deck.py <url> --page 4`; the upscale test's page 7: `upscale_deck.py <url>`). A generated corporate deck
   (`smode-shows/tools/make_companion_xl.py`) is replayed one page at a time:
   `node scripts/replay.mjs <file.companionconfig> --url <companion> --pages <n>`.
 - **Never replay a whole generated file over a NUC**: without `--pages`, `replay.mjs` clears every page the file
