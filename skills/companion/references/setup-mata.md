@@ -79,12 +79,15 @@ over OSC only, never through Smode's REST API.
 | 6 | LOCKCTL | 6/0/0 sends every surface to LOCK, 6/0/1 back to the show page. desklock presses them over the HTTP API. Not for the operator, and no key links here. | `deck_system.mjs` |
 | 7 | UPSCALE | Gabriel's 4K upscale demonstration (`upscale-test.project`, since 2026-11-25): BLACK / TEST / PIXEL MAP 7/0/0-2, UPSCALE A / B / C 7/1/0-2, the rest a copy of page 4. Its UPSCALE keys send 3-5 only while the master runs upscale-test; with another project open they are drawn "waiting" and send nothing (rerun the script after every switch). `smode-shows/docs/upscale-test.md` | `smode-shows/tools/master/upscale_deck.py <url>` |
 
-Custom variables (`$(custom:...)`), pushed by the Smode master (over HTTP once a second; the clip readouts over the
-raw UDP API at up to 30 Hz, which never creates a variable: it must exist first): `smode_look`, `smode_next`,
+Custom variables (`$(custom:...)`), pushed by the Smode master's REMOTE STATE (v29 since 2026-11-26) over the raw
+UDP API (16759) only, each on change (the readouts at up to 30 Hz) and all again every 5 s: `smode_look`, `smode_next`,
 `smode_ppt`, `smode_trans`, `smode_clip`, `smode_time`, `smode_clip_pos`, `smode_clip_len`, `smode_clip_pct`,
 `smode_pip`, `smode_pip_pos`, `smode_pip_len`, `smode_pip_pct`, `smode_project` (the project open on the master,
-`casamento`; REMOTE STATE v28 since 2026-11-26, empty = not known yet); and `room_phones` (ON / OFF, from room-remote). Do
-not set them by hand during a show. The master pushes to NUC-01, NUC-02 and the notebook.
+`casamento`; empty = not known yet), `smode_rs_ver` (`29 5/5` = all five Smode servers run the same REMOTE STATE file,
+else which server runs what); and `room_phones` (ON / OFF, from room-remote). That API never creates a variable and
+rejects an empty value: every variable must exist on each Companion first (a no-value state arrives as `-`). Do
+not set them by hand during a show. The master sends to NUC-01, NUC-02 and the notebook (2.0.0.10 and its NetBird
+address), all listed in one place in REMOTE STATE (`rs_COMPANIONS`).
 
 ## How the pages are built
 
