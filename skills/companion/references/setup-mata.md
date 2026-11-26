@@ -82,7 +82,8 @@ over OSC only, never through Smode's REST API.
 Custom variables (`$(custom:...)`), pushed by the Smode master (over HTTP once a second; the clip readouts over the
 raw UDP API at up to 30 Hz, which never creates a variable: it must exist first): `smode_look`, `smode_next`,
 `smode_ppt`, `smode_trans`, `smode_clip`, `smode_time`, `smode_clip_pos`, `smode_clip_len`, `smode_clip_pct`,
-`smode_pip`, `smode_pip_pos`, `smode_pip_len`, `smode_pip_pct`; and `room_phones` (ON / OFF, from room-remote). Do
+`smode_pip`, `smode_pip_pos`, `smode_pip_len`, `smode_pip_pct`, `smode_project` (the project open on the master,
+`casamento`; REMOTE STATE v28 since 2026-11-26, empty = not known yet); and `room_phones` (ON / OFF, from room-remote). Do
 not set them by hand during a show. The master pushes to NUC-01, NUC-02 and the notebook.
 
 ## How the pages are built
